@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Imaging.Metadata.Tests/Imaging.Metadata.Tests.csproj" />
+  <Project Path="Imaging.Metadata/Imaging.Metadata.csproj" />
+</Solution>

@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore local tools
+        run: dotnet tool restore
+
+      - name: Restore dependencies
+        run: dotnet restore Imaging.Metadata/Imaging.Metadata.slnx
+
+      - name: Verify formatting
+        run: dotnet format Imaging.Metadata/Imaging.Metadata.slnx --verify-no-changes --no-restore
+
+      - name: Build solution
+        run: dotnet build Imaging.Metadata/Imaging.Metadata.slnx --configuration Release
+
+      - name: Run tests with coverage threshold
+        run: dotnet test Imaging.Metadata/Imaging.Metadata.Tests/Imaging.Metadata.Tests.csproj --configuration Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=./TestResults/coverage/ /p:Threshold=80 /p:ThresholdType=line /p:ThresholdStat=total /p:Include="[Imaging.Metadata]*"
+
+      - name: Verify coverage report contains production code
+        run: |
+          python -c "import sys, xml.etree.ElementTree as ET; lines=int(ET.parse('Imaging.Metadata/Imaging.Metadata.Tests/TestResults/coverage/coverage.cobertura.xml').getroot().get('lines-valid', '0')); print(f'Instrumented production lines: {lines}'); sys.exit(0 if lines else 1)"
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-coverage
+          path: Imaging.Metadata/Imaging.Metadata.Tests/TestResults/coverage/coverage.cobertura.xml
+          if-no-files-found: warn
+
+      - name: Run mutation tests
+        working-directory: Imaging.Metadata/Imaging.Metadata.Tests
+        run: dotnet tool run dotnet-stryker
+
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report
+          path: "**/StrykerOutput/**"
+          if-no-files-found: warn
